@@ -1,0 +1,39 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flet
+
+    - name: Build APK with Flet
+      uses: flet-dev/flet-action@v0.1.0
+      with:
+        # The main python file of your app
+        main-file: main.py 
+        # (Optional) App name
+        app-name: "Prayer Tracker"
+        # (Optional) App organization
+        app-org: "com.prayer.tracker"
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: prayer-tracker-apk
+        path: build/apk/*.apk
