@@ -10,37 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    
     - uses: actions/checkout@v3
 
-    
+    # 1. Setup Java (Required for Android)
     - uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '17'
 
-   
+    # 2. Setup Flutter
     - uses: subosito/flutter-action@v2
       with:
         channel: 'stable'
 
-    
+    # 3. Setup Python
     - uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    
+    # 4. Install Flet
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install flet
 
-   
+    # 5. Build APK (The Fix is here!)
+    # We rename your file to main.py to avoid confusion
+    # We use "yes |" to auto-answer "Yes" to any initialization prompts
     - name: Build APK
       run: |
-        flet build apk salah_tracker_mobile.py
+        mv salah_tracker_mobile.py main.py
+        yes | flet build apk
 
-   
+    # 6. Upload the Result
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
