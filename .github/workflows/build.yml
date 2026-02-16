@@ -10,30 +10,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    # 1. Check out your code
+    - uses: actions/checkout@v3
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
+    # 2. Install Java (Required for Android builds)
+    - uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    # 3. Install Flutter (The engine Flet runs on)
+    - uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    # 4. Install Python
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
+    # 5. Install Flet and Build Tools
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install flet
 
-    - name: Build APK with Flet
-      uses: flet-dev/flet-action@v0.1.0
-      with:
-        # The main python file of your app
-        main-file: main.py 
-        # (Optional) App name
-        app-name: "Prayer Tracker"
-        # (Optional) App organization
-        app-org: "com.prayer.tracker"
+    # 6. Build the APK
+    # Note: We specify your filename 'salah_tracker_mobile.py' here
+    - name: Build APK
+      run: |
+        flet build apk salah_tracker_mobile.py
 
-    - name: Upload APK
+    # 7. Upload the APK so you can download it
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: prayer-tracker-apk
-        path: build/apk/*.apk
+        name: prayer-tracker-app
+        path: build/apk/**/*.apk
