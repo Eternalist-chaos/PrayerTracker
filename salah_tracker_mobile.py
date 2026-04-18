@@ -20,17 +20,28 @@ def main(page: ft.Page):
 
     # --- 1. DATA LOGIC ---
     def load_data():
-        if not page.client_storage.contains_key("app_data"):
+        try:
+            if not page.client_storage.contains_key("app_data"):
+                return {
+                    "missed_prayers": {p: 0 for p in PRAYER_NAMES},
+                    "daily_status": {p: False for p in PRAYER_NAMES},
+                    "last_opened": date.today().isoformat(),
+                    "cleared_log": {}
+                }
+            return page.client_storage.get("app_data")
+        except:
             return {
                 "missed_prayers": {p: 0 for p in PRAYER_NAMES},
                 "daily_status": {p: False for p in PRAYER_NAMES},
                 "last_opened": date.today().isoformat(),
                 "cleared_log": {}
             }
-        return page.client_storage.get("app_data")
 
     def save_data(data):
-        page.client_storage.set("app_data", data)
+        try:
+            page.client_storage.set("app_data", data)
+        except:
+            pass
 
     # Initialize Data
     app_data = load_data()
@@ -40,7 +51,7 @@ def main(page: ft.Page):
         today_str = date.today().isoformat()
         if today_str != app_data.get("last_opened"):
             for p in PRAYER_NAMES:
-                if not app_data["daily_status"].get(p, False): 
+                if not app_data["daily_status"].get(p, False):
                     app_data["missed_prayers"][p] += 1
             for p in PRAYER_NAMES:
                 app_data["daily_status"][p] = False
@@ -60,10 +71,10 @@ def main(page: ft.Page):
             count = app_data["missed_prayers"][p]
             txt_counters[p].value = str(count)
             txt_counters[p].color = "red400" if count > 0 else "grey700"
-        
+
         # Update Grand Total
         txt_grand_total.value = f"{get_grand_total()}"
-        
+
         # Redraw buttons
         render_daily_buttons()
         page.update()
@@ -71,6 +82,15 @@ def main(page: ft.Page):
     def toggle_prayer(e):
         p_name = e.control.data
         app_data["daily_status"][p_name] = not app_data["daily_status"][p_name]
+        save_data(app_data)
+        update_missed_display()
+
+    def make_up_prayer(e):
+        p_name = e.control.data
+        if not app_data["daily_status"][p_name]:
+            app_data["daily_status"][p_name] = True
+        elif app_data["missed_prayers"][p_name] > 0:
+            app_data["missed_prayers"][p_name] -= 1
         save_data(app_data)
         update_missed_display()
 
@@ -98,7 +118,18 @@ def main(page: ft.Page):
                 on_click=toggle_prayer,
                 content=ft.Text(p[:3].upper(), weight="bold", size=11, color=text_color)
             )
-            daily_row.controls.append(btn)
+
+            makeup_btn = ft.IconButton(
+                icon=ft.Icons.ADD,
+                icon_size=16,
+                data=p,
+                on_click=make_up_prayer,
+                tooltip=f"Log make-up {p}",
+                icon_color=COLOR_PRIMARY
+            )
+
+            col = ft.Column([btn, makeup_btn], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
+            daily_row.controls.append(col)
 
     # --- 4. CALCULATOR LOGIC ---
     def calculate_historical(e):
@@ -106,52 +137,66 @@ def main(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text("Please select Start and End dates."), open=True)
             page.update()
             return
-            
+
         start_d = start_picker.value.date()
         end_d = end_picker.value.date()
-        
+
         if start_d > end_d:
             page.snack_bar = ft.SnackBar(ft.Text("Start Date cannot be after End Date!"), open=True)
             page.update()
             return
 
         selected_day_name = dropdown_weekday.value
-        exc_idx = WEEKDAYS.index(selected_day_name) if selected_day_name else -1
-        
-        to_skip = []
-        if cb_exc_fajr.value: to_skip.append("Fajr")
-        if cb_exc_dhuhr.value: to_skip.append("Dhuhr")
-        if cb_exc_asr.value: to_skip.append("Asr")
-        if cb_exc_mag.value: to_skip.append("Maghrib")
-        if cb_exc_isha.value: to_skip.append("Isha")
+        target_weekday = WEEKDAYS.index(selected_day_name) if selected_day_name and selected_day_name != "Every Day" else -1
+
+        selected_prayers = []
+        if cb_fajr.value: selected_prayers.append("Fajr")
+        if cb_dhuhr.value: selected_prayers.append("Dhuhr")
+        if cb_asr.value: selected_prayers.append("Asr")
+        if cb_mag.value: selected_prayers.append("Maghrib")
+        if cb_isha.value: selected_prayers.append("Isha")
+
+        if not selected_prayers:
+            page.snack_bar = ft.SnackBar(ft.Text("Please select at least one prayer!"), open=True)
+            page.update()
+            return
+
+        operation = rg_operation.value
 
         curr = start_d
         while curr <= end_d:
-            is_exc = (curr.weekday() == exc_idx)
-            for p in PRAYER_NAMES:
-                if not (is_exc and p in to_skip):
-                    app_data["missed_prayers"][p] += 1
+            if target_weekday == -1 or curr.weekday() == target_weekday:
+                for p in selected_prayers:
+                    if operation == "add":
+                        app_data["missed_prayers"][p] += 1
+                    elif operation == "remove":
+                        if app_data["missed_prayers"][p] > 0:
+                            app_data["missed_prayers"][p] -= 1
             curr += timedelta(days=1)
-            
+
         save_data(app_data)
         update_missed_display()
-        page.snack_bar = ft.SnackBar(ft.Text(f"Added prayers from {start_d} to {end_d}"), open=True)
+        op_text = "Added to" if operation == "add" else "Removed from"
+        page.snack_bar = ft.SnackBar(ft.Text(f"{op_text} counters from {start_d} to {end_d}"), open=True)
         page.update()
 
     # --- 5. RESET / WIPE LOGIC ---
     def perform_wipe(e):
         # 1. Clear Storage
-        page.client_storage.clear()
-        
+        try:
+            page.client_storage.clear()
+        except:
+            pass
+
         # 2. Reset Memory
         for p in PRAYER_NAMES:
             app_data["missed_prayers"][p] = 0
             app_data["daily_status"][p] = False
         app_data["cleared_log"] = {}
-        
+
         # 3. Save Clean State
         save_data(app_data)
-        
+
         # 4. Close Dialogs & Update UI
         page.close(dlg_confirm_2)
         update_missed_display()
@@ -191,8 +236,8 @@ def main(page: ft.Page):
         margin=ft.Margin(0, 0, 0, 15)
     )
 
-    daily_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN) 
-    
+    daily_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
     daily_card = ft.Card(
         elevation=2,
         content=ft.Container(
@@ -217,7 +262,7 @@ def main(page: ft.Page):
     # Missed Stats Grid
     txt_counters = {}
     stat_items = []
-    box_width = (page.window_width - 80) / 5 if page.window_width else 60
+    box_width = (page.window_width - 80) / 5 if hasattr(page, 'window_width') and page.window_width else 60
 
     for p in PRAYER_NAMES:
         txt_counters[p] = ft.Text(str(app_data["missed_prayers"][p]), size=20, weight="bold", color="grey700")
@@ -239,9 +284,22 @@ def main(page: ft.Page):
     page.overlay.extend([start_picker, end_picker])
 
     # Tools Controls
-    dropdown_weekday = ft.Dropdown(label="Day Offset", options=[ft.dropdown.Option(d) for d in WEEKDAYS], height=45, text_size=12)
-    cb_exc_fajr = ft.Checkbox(label="Fajr", value=True); cb_exc_dhuhr = ft.Checkbox(label="Dhuhr", value=True)
-    cb_exc_asr = ft.Checkbox(label="Asr", value=False); cb_exc_mag = ft.Checkbox(label="Maghrib", value=False); cb_exc_isha = ft.Checkbox(label="Isha", value=False)
+    rg_operation = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="add", label="Mark as Missed (+)"),
+            ft.Radio(value="remove", label="Mark as Prayed (-)")
+        ]),
+        value="add"
+    )
+    dropdown_weekday = ft.Dropdown(
+        label="Day Filter",
+        options=[ft.dropdown.Option("Every Day")] + [ft.dropdown.Option(d) for d in WEEKDAYS],
+        value="Every Day",
+        height=45,
+        text_size=12
+    )
+    cb_fajr = ft.Checkbox(label="Fajr", value=True); cb_dhuhr = ft.Checkbox(label="Dhuhr", value=True)
+    cb_asr = ft.Checkbox(label="Asr", value=False); cb_mag = ft.Checkbox(label="Maghrib", value=False); cb_isha = ft.Checkbox(label="Isha", value=False)
 
     tools_card = ft.Card(
         elevation=2,
@@ -251,24 +309,25 @@ def main(page: ft.Page):
                 title=ft.Text("Calculator & Tools", weight="bold", color="grey700"),
                 controls=[
                     ft.Container(padding=15, content=ft.Column([
-                        ft.Text("BULK ADD RANGE", size=12, weight="bold", color=COLOR_PRIMARY),
+                        ft.Text("BULK MODIFY RANGE", size=12, weight="bold", color=COLOR_PRIMARY),
+                        rg_operation,
                         ft.Row([
-                            ft.ElevatedButton("Start", on_click=lambda _: setattr(start_picker, 'open', True) or page.update()), 
+                            ft.ElevatedButton("Start", on_click=lambda _: setattr(start_picker, 'open', True) or page.update()),
                             ft.ElevatedButton("End", on_click=lambda _: setattr(end_picker, 'open', True) or page.update())
                         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                         dropdown_weekday,
-                        ft.Row([cb_exc_fajr, cb_exc_dhuhr, cb_exc_asr, cb_exc_mag, cb_exc_isha], wrap=True),
-                        ft.ElevatedButton("Run Calculation", on_click=calculate_historical, bgcolor=COLOR_PRIMARY, color="white", width=400),
-                        
+                        ft.Row([cb_fajr, cb_dhuhr, cb_asr, cb_mag, cb_isha], wrap=True),
+                        ft.ElevatedButton("Apply to Tracker", on_click=calculate_historical, bgcolor=COLOR_PRIMARY, color="white", width=400),
+
                         ft.Divider(height=30),
-                        
+
                         # DANGER ZONE
                         ft.Text("DANGER ZONE", size=12, weight="bold", color=COLOR_DANGER),
                         ft.ElevatedButton(
-                            "RESET ALL DATA", 
+                            "RESET ALL DATA",
                             icon=ft.Icons.DELETE_FOREVER,
-                            bgcolor=COLOR_DANGER, 
-                            color="white", 
+                            bgcolor=COLOR_DANGER,
+                            color="white",
                             width=400,
                             on_click=lambda e: page.open(dlg_confirm_1)
                         )
@@ -281,4 +340,5 @@ def main(page: ft.Page):
     page.add(header, total_card, ft.Container(height=15), stats_grid, ft.Container(height=20), daily_card, ft.Container(height=20), tools_card)
     update_missed_display()
 
-ft.app(main)
+if __name__ == '__main__':
+    ft.app(main)
