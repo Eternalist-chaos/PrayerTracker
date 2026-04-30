@@ -5,18 +5,31 @@ from datetime import datetime, date, timedelta
 PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-COLOR_PRIMARY = "teal700"
-COLOR_SECONDARY = "teal100"
-COLOR_BG = "grey100"
-COLOR_CARD = "white"
-COLOR_DANGER = "red900"
+# Warm Islamic Aesthetic Palette
+COLOR_PRIMARY = "#8B5A2B"     # Deep warm brown/bronze
+COLOR_SECONDARY = "#D4AF37"   # Gold accent
+COLOR_BG = "#FAF3E0"          # Warm cream
+COLOR_CARD = "#FFFFFF"        # White for cards, maybe tinted
+COLOR_CARD_TINT = "#FDFBF7"   # Slightly warm white for inner cards
+COLOR_DANGER = "#9E3C3C"      # Warm, deep red
+COLOR_TEXT_MAIN = "#4A3B32"   # Soft dark brown for primary text
+COLOR_TEXT_MUTED = "#8C7A6B"  # Muted warm brown for secondary text
+
 
 def main(page: ft.Page):
     page.title = "My Prayer Journey"
     page.scroll = "adaptive"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.bgcolor = COLOR_BG
-    page.padding = 20
+
+        page.bgcolor = COLOR_BG
+    page.padding = 0 # Remove page padding, apply to inner container instead
+
+    # Set up custom fonts
+    page.fonts = {
+        "Cinzel": "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel-VariableFont_wght.ttf",
+        "Lato": "https://raw.githubusercontent.com/google/fonts/main/ofl/lato/Lato-Regular.ttf"
+    }
+    page.theme = ft.Theme(font_family="Lato")
 
     # --- 1. DATA LOGIC ---
     def load_data():
@@ -98,37 +111,38 @@ def main(page: ft.Page):
         daily_row.controls.clear()
         for p in PRAYER_NAMES:
             is_done = app_data["daily_status"].get(p, False)
-            bg_color = COLOR_PRIMARY if is_done else "white"
-            text_color = "white" if is_done else COLOR_PRIMARY
-            border_color = "transparent" if is_done else COLOR_PRIMARY
+            bg_color = COLOR_PRIMARY if is_done else COLOR_CARD_TINT
+            text_color = "white" if is_done else COLOR_TEXT_MAIN
+            border_color = "transparent" if is_done else COLOR_SECONDARY
 
             btn = ft.Container(
                 data=p,
-                width=60,
-                height=50,
+                width=55,
+                height=55,
                 bgcolor=bg_color,
-                border_radius=8,
+                border_radius=27.5, # Circular look
                 border=ft.Border(
-                    top=ft.BorderSide(1, border_color),
-                    bottom=ft.BorderSide(1, border_color),
-                    left=ft.BorderSide(1, border_color),
-                    right=ft.BorderSide(1, border_color)
+                    top=ft.BorderSide(2, border_color),
+                    bottom=ft.BorderSide(2, border_color),
+                    left=ft.BorderSide(2, border_color),
+                    right=ft.BorderSide(2, border_color)
                 ),
                 alignment=ft.Alignment(0, 0),
                 on_click=toggle_prayer,
-                content=ft.Text(p[:3].upper(), weight="bold", size=11, color=text_color)
+                content=ft.Text(p[:3].upper(), font_family="Cinzel", weight="bold", size=12, color=text_color)
             )
 
             makeup_btn = ft.IconButton(
                 icon=ft.Icons.ADD,
-                icon_size=16,
+                icon_size=18,
                 data=p,
                 on_click=make_up_prayer,
                 tooltip=f"Log make-up {p}",
-                icon_color=COLOR_PRIMARY
+                icon_color=COLOR_SECONDARY,
+                bgcolor='#1A8B5A2B'
             )
 
-            col = ft.Column([btn, makeup_btn], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
+            col = ft.Column([btn, ft.Container(height=5), makeup_btn], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
             daily_row.controls.append(col)
 
     # --- 4. CALCULATOR LOGIC ---
@@ -265,13 +279,14 @@ def main(page: ft.Page):
     box_width = (page.window_width - 80) / 5 if hasattr(page, 'window_width') and page.window_width else 60
 
     for p in PRAYER_NAMES:
-        txt_counters[p] = ft.Text(str(app_data["missed_prayers"][p]), size=20, weight="bold", color="grey700")
+        txt_counters[p] = ft.Text(str(app_data["missed_prayers"][p]), size=22, weight="bold", color=COLOR_DANGER)
         stat_items.append(
             ft.Container(
-                bgcolor=COLOR_CARD, padding=5, border_radius=10,
-                width=box_width, height=80, alignment=ft.Alignment(0, 0),
+                bgcolor=COLOR_CARD, padding=10, border_radius=15,
+                border=ft.border.all(1, '#338B5A2B'),
+                width=box_width, height=90, alignment=ft.Alignment(0, 0),
                 content=ft.Column([
-                    ft.Text(p[:3].upper(), size=10, color="grey500", weight="bold"),
+                    ft.Text(p[:3].upper(), font_family="Cinzel", size=11, color=COLOR_TEXT_MUTED, weight="bold"),
                     txt_counters[p]
                 ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
             )
@@ -337,7 +352,18 @@ def main(page: ft.Page):
         )
     )
 
-    page.add(header, total_card, ft.Container(height=15), stats_grid, ft.Container(height=20), daily_card, ft.Container(height=20), tools_card)
+    # Wrap everything in a main container with the pattern background
+    main_content = ft.Container(
+        padding=20,
+        expand=True,
+        content=ft.Column([
+            header, total_card, ft.Container(height=15), stats_grid, ft.Container(height=20), daily_card, ft.Container(height=20), tools_card
+        ], scroll="adaptive")
+    )
+
+
+
+    page.add(main_content)
     update_missed_display()
 
 if __name__ == '__main__':
